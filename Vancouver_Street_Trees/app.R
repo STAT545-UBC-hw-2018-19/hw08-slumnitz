@@ -1,7 +1,11 @@
 library(shiny)
 library(leaflet)
 library(tidyverse)
-library(forecast)
+library(DT)
+library(crosstalk)
+library(shinyWidgets)
+
+# load data and clean dataframe
 trees <- read.csv("StreetTrees_CityWide.csv", stringsAsFactors = FALSE) %>% 
 	select(lon="LONGITUDE",
 		   lat="LATITUDE",
@@ -18,46 +22,101 @@ trees <- read.csv("StreetTrees_CityWide.csv", stringsAsFactors = FALSE) %>%
 	transform(date_planted = as.Date(as.character(date_planted), "%Y%m%d"))
 
 
-# Define UI for application that draws a histogram
+# Define UI for application
 ui <- fluidPage(
     titlePanel("Vancouver's Street Trees",
                windowTitle = "Street Tree app"),
     sidebarLayout(
         sidebarPanel(
-            sliderInput("heightInput", "Select tree height",
-                        min=0, max=20, value=c(1, 3), pre="m"),
-            radioButtons("typeInput", "Select a tree genus",
-                         choices = unique(trees$genus), # 
-                         selected = "SALIX")
+            sliderInput("heightInput", "Select tree height:",
+                        min=0, max=30, value=c(3,10), pre="m"),
+            sliderInput("diameterInput", "Select tree diameter:",
+            						min=0, max=50, value=c(5,15), pre="m"),
+            selectInput("hoodInput", "Select a neighborhood", 
+            			choices=unique(trees$neighbourhood)),
+            uiOutput("streetOutput"),
+            plotOutput("tree_genus"),
+            br(), br(),
+            helpText("Data from the City of Vancouver (2018) vancouver Tree Inventory data."),
+            p("Made with", a("Shiny", href = "http://shiny.rstudio.com"), ".")
 
         ),
         mainPanel(
         	leafletOutput("map"),
-            plotOutput("tree_genus"),
-            tableOutput("tree_data")
-            )
+        	DTOutput("tree_data"))
     )
 )
 
 # Define server logic required to draw a histogram
 server <- function(input, output) {
-    trees_filtered <- reactive({ #needed for update
-        trees %>%
-            filter(
-                height < input$heightInput[2], #
-                height > input$heightInput[1],
-                genus == input$typeInput)})
-
+	tree_mid <- reactive({
+		trees %>% 
+			filter(
+				height < input$heightInput[2],
+				height > input$heightInput[1],
+				diameter < input$diameterInput[2],
+				diameter > input$diameterInput[1],
+				neighbourhood == input$hoodInput)
+	})
+	
+			output$streetOutput <- renderUI({
+			selectInput("streetInput","Select a street",
+									choices=unique(tree_mid()$on_street))
+		})
+	
+	  trees_filtered <- reactive({
+	  	if (is.null(input$streetInput)) {
+	  		return(NULL)
+	  	}
+      	trees %>% 
+    		filter(
+    			height < input$heightInput[2],
+    			height > input$heightInput[1],
+    			diameter < input$diameterInput[2],
+    			diameter > input$diameterInput[1],
+    			neighbourhood == input$hoodInput,
+    			on_street == input$streetInput)
+    	})
+	  
+	  # DEBUG
+    icons <- reactive({
+    	s <- input$tree_data_rows_selected
+    	
+    	getColor <- function() {
+    		sapply((as.integer(rownames(trees_filtered()))), function(index) {
+    			if(index %in% s) {
+    				"green"
+    			} else {
+    				"red"
+    			} })
+    	}
+    	
+    	awesomeIcons(
+    	icon = 'tree',
+    	iconColor = 'black',
+    	library = 'fa',
+    	markerColor=getColor()
+    )})
+    
+    
     output$map <- renderLeaflet({
+    	if (is.null(trees_filtered())) {
+    		return()
+    	}
     	# Use leaflet() here, and only include aspects of the map that
     	# won't need to change dynamically (at least, not unless the
     	# entire map is being torn down and recreated).
-    	leaflet(trees) %>% addTiles() %>%
-    		fitBounds(~min(lon), ~min(lat), ~max(lon), ~max(lat))
+    	trees_filtered() %>% 
+    	leaflet() %>% addTiles() %>%
+    		fitBounds(~min(lon), ~min(lat), ~max(lon), ~max(lat)) %>% 
+    		addAwesomeMarkers(lng = ~lon, lat = ~lat, icon=icons(), label=~as.character(genus))
     })
     
     output$tree_genus <- renderPlot({
-        trees_filtered %>% 
+    	if (is.null(trees_filtered())) {
+    		return()
+    	}
+        trees_filtered() %>% 
         	ggplot(aes(x = "", fill = factor(genus))) + 
         	geom_bar(width = 1) +
         	theme(axis.line = element_blank(), 
@@ -70,7 +129,8 @@ server <- function(input, output) {
         	coord_polar(theta = "y", start=0)
     })
     
-    output$tree_data <- renderTable(trees_filtered())
+    output$tree_data = renderDT(
+    	trees_filtered(), options = list(lengthChange = FALSE))
 
 }
 
