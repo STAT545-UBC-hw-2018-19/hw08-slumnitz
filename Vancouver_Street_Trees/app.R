@@ -2,8 +2,6 @@ library(shiny)
 library(leaflet)
 library(tidyverse)
 library(DT)
-library(crosstalk)
-library(shinyWidgets)
 
 # load data and clean dataframe
 trees <- read.csv("StreetTrees_CityWide.csv", stringsAsFactors = FALSE) %>% 
