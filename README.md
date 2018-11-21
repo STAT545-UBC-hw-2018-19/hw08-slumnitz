@@ -35,6 +35,8 @@ Deploy on shinyapps.io | :heavy_check_mark: | [Vancouver's Street Trees](https:/
 
 ### The challenge of reactivity
 
+**TRY IT OUT:** click on any row in the table.
+
 The challange in creating great shiny apps is correctly connecting inputs and outputs with each other. For example, so that the user can click on rows in a table and shiny automatically highlights specific objects in other visualisations. Or that only street names are displayed that are present in a previously selected neighbourhood. I did not find good best practive examples on the internet how to solve these problems, checkign documentation and stackoverflow chats. In the end I wrote code connected to the logic described in standard documentation examples. Due to the lack of best practice examples on how to properly connect inputs and outputs this work can fill teh gap and show others the value added.
 
 ### Resources
