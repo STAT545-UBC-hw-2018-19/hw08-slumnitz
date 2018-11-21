@@ -20,6 +20,7 @@ trees <- read.csv("StreetTrees_CityWide.csv", stringsAsFactors = FALSE) %>%
 		   common_name="COMMON_NAME") %>% 
 	filter(!(lat==0)) %>% 
 	transform(date_planted = as.Date(as.character(date_planted), "%Y%m%d"))
+	# filter 0 lat values and transform date integer to proper date.
 
 
 # Define UI for application
@@ -28,27 +29,36 @@ ui <- fluidPage(
                windowTitle = "Street Tree app"),
     sidebarLayout(
         sidebarPanel(
+        	  # height
             sliderInput("heightInput", "Select tree height:",
                         min=0, max=30, value=c(3,10), pre="m"),
+            # diameter
             sliderInput("diameterInput", "Select tree diameter:",
             						min=0, max=50, value=c(5,15), pre="m"),
-            selectInput("hoodInput", "Select a neighborhood", 
-            			choices=unique(trees$neighbourhood)),
+            # neighbourhood
+            selectInput("hoodInput", "Select a neighbourhood", 
+            			choices=unique(trees$neighbourhood), selected="KITSILANO"),
+            # street according dependant on neighbourhood
             uiOutput("streetOutput"),
+            # plot tree genus distribution
             plotOutput("tree_genus"),
-            br(), br(),
+            br(),
+            # Data Reference
             helpText("Data from the City of Vancouver (2018) vancouver Tree Inventory data."),
+            p("Access data", a("here", href = "https://data.vancouver.ca/datacatalogue/streettrees.htm"), "."),
+            # add shiny reference
             p("Made with", a("Shiny", href = "http://shiny.rstudio.com"), ".")
 
         ),
         mainPanel(
-        	leafletOutput("map"),
+        	leafletOutput("map"), 
         	DTOutput("tree_data"))
     )
 )
 
 # Define server logic required to draw a histogram
 server <- function(input, output) {
+	# function needed to update street Input
 	tree_mid <- reactive({
 		trees %>% 
 			filter(
@@ -59,11 +69,13 @@ server <- function(input, output) {
 				neighbourhood == input$hoodInput)
 	})
 	
+			# define Street inpout dependent on neighbourhood choice
 			output$streetOutput <- renderUI({
 			selectInput("streetInput","Select a street",
 									choices=unique(tree_mid()$on_street))
 		})
 	
+		# filter input data dependent on choices
 	  trees_filtered <- reactive({
 	  	if (is.null(input$streetInput)) {
 	  		return(NULL)
@@ -78,19 +90,19 @@ server <- function(input, output) {
     			on_street == input$streetInput)
     	})
 	  
-	  # DEBUG
+	  # Add color dependent on selection in table
     icons <- reactive({
-    	s <- input$tree_data_rows_selected
-    	
+    	s <- input$tree_data_rows_selected # selection of table
     	getColor <- function() {
     		sapply((as.integer(rownames(trees_filtered()))), function(index) {
     			if(index %in% s) {
-    				"green"
-    			} else {
     				"red"
+    			} else {
+    				"green"
     			} })
     	}
     	
+    	# create Icon
     	awesomeIcons(
     	icon = 'tree',
     	iconColor = 'black',
@@ -98,20 +110,19 @@ server <- function(input, output) {
     	markerColor=getColor()
     )})
     
-    
+    # create map
     output$map <- renderLeaflet({
-    	if (is.null(trees_filtered())) {
+    	if (is.null(icons())) {
     		return()
     	}
-    	# Use leaflet() here, and only include aspects of the map that
-    	# won't need to change dynamically (at least, not unless the
-    	# entire map is being torn down and recreated).
+    	
     	trees_filtered() %>% 
     	leaflet() %>% addTiles() %>%
     		fitBounds(~min(lon), ~min(lat), ~max(lon), ~max(lat)) %>% 
     		addAwesomeMarkers(lng = ~lon, lat = ~lat, icon=icons(), label=~as.character(genus))
     })
     
+    # create Pie chart
     output$tree_genus <- renderPlot({
     	if (is.null(trees_filtered())) {
     		return()
@@ -130,7 +141,10 @@ server <- function(input, output) {
     })
     
     output$tree_data = renderDT(
-    	trees_filtered(), options = list(lengthChange = FALSE))
+    	trees_filtered(), rownames = FALSE, extensions = 'Buttons', 
+    	options = list(dom = 'Bfrtip', buttons = list(list(extend = 'colvis', columns = c(0, 1, 2, 3,9))),
+    								 lengthChange = FALSE, scrollX= TRUE),
+    						class = "compact")
 
 }
 
